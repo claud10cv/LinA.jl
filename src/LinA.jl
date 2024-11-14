@@ -5,7 +5,9 @@ using CDDLib
 using ForwardDiff
 using GeneralizedGenerated
 using Polyhedra
-using Roots
+using IntervalRootFinding
+using IntervalArithmetic
+using PrecompileTools
 
 import Base.-, Base.+, Base.show
 
@@ -31,5 +33,14 @@ include("linearizeDispatch.jl")
 include("bounding.jl")
 include("simultaneousLin.jl")
 
+@setup_workload begin
+    f = x -> x * (x + 1) * log(x + 2) + 1
+    @compile_workload begin
+        for e in [Relative(1e-1), Absolute(1e-1)], alg in [HeuristicLin, ExactLin], bounding in [Under, Over, Best]
+            pwl = Linearize(f, 0, 1, e, alg(); bounding = bounding())
+            pwl(0.5)
+        end
+    end
+end
 
 end # module

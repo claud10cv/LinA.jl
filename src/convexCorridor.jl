@@ -34,13 +34,15 @@ function LinearizeConvex(x1,x2,lower,upper,du)
             break
         end
 
-        a = find_zero(Base.Fix2(f, x1),(x1,x2), Bisection())
+        # a = find_zero(Base.Fix2(f, x1),(x1,x2), Bisection())
+        a = find_zero(x -> Base.Fix2(f, x1)(x), x1, x2)
         slope = du(a)
         b = lower(x1) - slope * x1
 
         #find the second end of the segment
         if Δ(x2, (slope, b)) <= 0
-           nextX1 = find_zero(Base.Fix2(Δ, (slope, b)),(a,x2),Bisection())
+            # nextX1 = find_zero(Base.Fix2(Δ, (slope, b)),(a,x2),Bisection())
+            nextX1 = find_zero(x -> Base.Fix2(Δ, (slope, b))(x), a, x2)
         else
             nextX1 = x2
         end

@@ -108,4 +108,9 @@ Derive(x::Number) = 0
 Derive(expr::Expr) = Calculus.simplify(differentiate(expr, :x))  # this is probably super slow
 Derive(f::Function) = Base.Fix1(ForwardDiff.derivative, f)
 
-;
+struct ScalarOptResult
+    x::Float64
+    val::Float64
+end
+
+const EPS::Float64 = 1e-7
