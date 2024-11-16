@@ -139,3 +139,49 @@ function invert_linearpiece(lp::LinearPiece, inv::Int64)
         return LinearPiece(lp.xMin, lp.xMax, -lp.a, -lp.b, x -> -lp.fct(x))
     end
 end
+
+function (pwl::Vector{LinA.LinearPiece})(x::Real, bounding, eps = EPS)::LinearizationEval
+    if x < pwl[1].xMin - eps || x > pwl[end].xMax + eps
+        throw(DomainError(x, "argument must be in the domain of the function"))
+    end
+    f, l = 1, length(pwl)
+    m = 0
+    while f <= l
+        m = floor(Int64, (f + l) / 2)
+        p = pwl[m]
+        if x >= p.xMin - eps && x <= p.xMax + eps
+            if bounding isa Best
+                return LinearizationEval(p(x), m)
+            else
+                break
+            end
+        elseif x < p.xMin - 1e-9
+            l = m - 1
+        else
+            f = m + 1
+        end
+    end
+    optval = bounding isa Under ? 1e+20 : -1e+20
+    optfn = bounding isa Under ? min : max
+    isless_fn(u, v)  = bounding isa Under ? u < v : u > v
+    optm = m
+    for i = m : -1 : 1
+        p = pwl[i]
+        if x < p.xMin - eps || x > p.xMax + eps
+            break
+        elseif isless(p(x), optval)
+            optval = p(x)
+            optm = i
+        end
+    end
+    for i = m + 1 : length(pwl)
+        p = pwl[i]
+        if x < p.xMin - eps || x > p.xMax + eps
+            break
+        elseif isless(p(x), optval)
+            optval = p(x)
+            optm = i
+        end
+    end
+    return LinearizationEval(optval, optm)
+end

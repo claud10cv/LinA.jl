@@ -33,7 +33,7 @@ end
 
 #evaluate a pieceWise linear function
 
-function (pwl::Array{LinearPiece, 1})(x::Real)
+#=function (pwl::Array{LinearPiece, 1})(x::Real)
 
     if x < pwl[1].xMin || x > pwl[end].xMax
         throw(DomainError(x, "argument must be in the domain of the function"))
@@ -43,6 +43,12 @@ function (pwl::Array{LinearPiece, 1})(x::Real)
     pieceIndex = searchsortedlast(starts,x)
     return pwl[pieceIndex](x)
 
+end
+=#
+
+struct LinearizationEval
+    val::Float64
+    piece::Int64
 end
 
 +(pwl::Array{LinearPiece, 1}, x::Real) = pwl .+ x
