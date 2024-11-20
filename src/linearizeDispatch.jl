@@ -105,13 +105,14 @@ function Linearize(expr_fct::Ef,x1::Real,x2::Real, e::ErrorType; bounding = Best
         # find roots of f and prevent running the main alg at them
         rts = IntervalRootFinding.roots(x -> h(x), interval(0, 1))
         breakpoints = [0.0, 1.0]
+        eps = 1e-6
         for z in rts
             zmid = (z.region.bareinterval.lo + z.region.bareinterval.hi) / 2 
-            if zmid > 1e-5
-                push!(breakpoints, zmid - 1e-5)
+            if zmid > eps
+                push!(breakpoints, zmid - eps / 2.001)
             end
             if zmid < 1 - 1e-5
-                push!(breakpoints, zmid + 1e-5)
+                push!(breakpoints, zmid + eps / 2.001)
             end
         end
         sort!(breakpoints)
@@ -119,7 +120,7 @@ function Linearize(expr_fct::Ef,x1::Real,x2::Real, e::ErrorType; bounding = Best
         for i in 1:length(breakpoints) - 1
             xp0, xpf = breakpoints[i], breakpoints[i + 1]
             if xpf - xp0 < EPS
-            elseif xpf - xp0 < 1e-4
+            elseif xpf - xp0 < eps
                 lp = construct_constant_piece(h, xp0, xpf, new_bounding)
                 push!(lps, lp)
             else
@@ -129,7 +130,7 @@ function Linearize(expr_fct::Ef,x1::Real,x2::Real, e::ErrorType; bounding = Best
                 append!(lps, newlps)
             end
         end
-        newlps = [invert_linearpiece(scale_linearpiece(lp, s, x1, x2), invert) for lp in lps]
+        newlps = [invert_linearpiece(unscale_linearpiece(reduce_infeasibilities(h, lp, new_bounding), s, x1, x2), invert) for lp in lps]
         # res = [optimize(x -> f(x) - lp(x), lp.xMin, lp.xMax) for lp in newlps]
         # res = [minimum(r) for r in res]
         # println("hola")

@@ -114,7 +114,7 @@ function is_mostly_negative(f::Ef, x1::Real, x2::Real)::Bool
     return res.val < EPS
 end
 
-function scale_linearpiece(lp::LinearPiece, s::Real, x1::Real, x2::Real)::LinearPiece
+function unscale_linearpiece(lp::LinearPiece, s::Real, x1::Real, x2::Real)::LinearPiece
     ymin = x1 + lp.xMin * (x2 - x1) 
     ymax = x1 + lp.xMax * (x2 - x1)
     ap = s * lp.a / (x2 - x1)
@@ -137,6 +137,32 @@ function invert_linearpiece(lp::LinearPiece, inv::Int64)
     if inv == 1 return lp
     else
         return LinearPiece(lp.xMin, lp.xMax, -lp.a, -lp.b, x -> -lp.fct(x))
+    end
+end
+
+function reduce_infeasibilities(f::Ef, lp::LinearPiece, bounding::BoundingType)::LinearPiece
+    if bounding isa Best
+        return lp
+    elseif bounding isa Under
+        res = minimize(x -> f(x) - lp(x), lp.xMin, lp.xMax)
+        val = res.val
+        if val < -EPS
+            println("translating piece by $(val)")
+            newlp = lp + val
+            return newlp
+        else
+            return lp
+        end
+    else
+        res = minimize(x -> lp(x) - f(x), lp.xMin, lp.xMax)
+        val = res.val
+        if val < -EPS
+            println("translating piece by $(-val)")
+            newlp = lp - val
+            return newlp
+        else
+            return lp
+        end
     end
 end
 

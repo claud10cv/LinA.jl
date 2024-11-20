@@ -16,9 +16,10 @@ function ExactPiece(start::Real,maximum::Real,lower,upper)
     #TODO: If intersections are epsilon close skip intersections
     
     #numerical precision 
-    epsilon = 1e-5 
+    #epsilon = 1e-5 
+    epsilon = EPS
     line = LinearPiece(0,0,0,0,x->0)
-    pts = collect(range(start,maximum,length=50))
+    pts = collect(range(start,maximum,length=100))
     data = FctSample.(pts, Ref(lower),Ref(upper))
     
     succes=false;
