@@ -211,3 +211,54 @@ function (pwl::Vector{LinA.LinearPiece})(x::Real, bounding, eps = EPS)::Lineariz
     end
     return LinearizationEval(optval, optm)
 end
+
+function compute_limits_at_zero(g::Ef, x1::Real, x2::Real)::Vector{IntervalArithmetic.Interval}
+    eps = 1e-4
+    zs = IntervalRootFinding.roots(g, interval(x1, x2))
+    rts = [(z.region.bareinterval.lo + z.region.bareinterval.hi) / 2 for z in zs]
+    zints = IntervalArithmetic.Interval[]
+    l(x) = g(x) - eps
+    u(x) = g(x) + eps
+    for (i, r) in enumerate(rts)
+        x0 = i > 1 ? rts[i - 1] + eps : x1
+        xf = i < length(rts) ? rts[i + 1] - eps : x2
+        zl = IntervalRootFinding.roots(x -> l(x), interval(x0, xf))
+        zr = IntervalRootFinding.roots(x -> u(x), interval(x0, xf))
+        ul = isempty(zl) ? typemax(Float64) : zl[begin].region.bareinterval.lo
+        ur = isempty(zr) ? typemax(Float64) : zr[begin].region.bareinterval.lo
+        @assert(min(ul, ur) < typemax(Float64), "cannot be both roots empty! $zl, $zr")
+        if max(ul, ur) < typemax(Float64)
+            y0 = min(ul, ur) 
+            yf = max(ul, ur)
+        else
+            u = min(ul, ur)
+            if u > r
+                y0 = r
+                yf = u
+            else
+                y0 = u
+                yf = r
+            end
+        end
+        y0 = max(x1, min(y0, r - eps))
+        yf = min(x2, max(yf, r + eps))
+        push!(zints, interval(y0, yf))
+    end
+    sort!(zints; lt = (u, v) -> isstrictless(u, v))
+    return zints
+end
+function compute_nonzero_intervals(g::Ef, x1::Real, x2::Real, zints::Vector{IntervalArithmetic.Interval})::Vector{IntervalArithmetic.Interval}
+    left = interval(x1, x2)
+    nzints = IntervalArithmetic.Interval[]
+    for zint in zints
+        chop = interiordiff(left, zint)
+        if !isatomic(chop[begin])
+            push!(nzints, chop[begin])
+        end
+        left = chop[end]
+    end
+    if !isatomic(left)
+        push!(nzints, left)
+    end
+    return nzints
+end

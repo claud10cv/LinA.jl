@@ -63,77 +63,75 @@ end
 
 function Linearize(expr_fct::Ef,x1::Real,x2::Real, e::ErrorType; bounding = Best() ::BoundingType,
     ConcavityChanges = [Inf]::Array{Float64,1})
+
+    (isfinite(x1) && isfinite(x2)) || throw(ArgumentError("Must be called on a finite interval"))
+
+    return ScaledLinearize(expr_fct, x1, x2, e, HeuristicLin, bounding, ConcavityChanges)
+end
+
+function Linearize(expr_fct::Ef,x1::Real,x2::Real, e::ErrorType, algorithm::HeuristicLin; bounding = Best() ::BoundingType,
+    ConcavityChanges = [Inf]::Array{Float64,1})
+
+    (isfinite(x1) && isfinite(x2)) || throw(ArgumentError("Must be called on a finite interval"))
     
-        (isfinite(x1) && isfinite(x2)) || throw(ArgumentError("Must be called on a finite interval"))
-    
-        return ScaledLinearize(expr_fct, x1, x2, e, HeuristicLin, bounding, ConcavityChanges)
-    end
-    
-    function Linearize(expr_fct::Ef,x1::Real,x2::Real, e::ErrorType,algorithm::HeuristicLin; bounding = Best() ::BoundingType,
-        ConcavityChanges = [Inf]::Array{Float64,1})
-    
-        (isfinite(x1) && isfinite(x2)) || throw(ArgumentError("Must be called on a finite interval"))
-        
-        return ScaledLinearize(expr_fct, x1, x2, e, HeuristicLin, bounding, ConcavityChanges)
-    end
-    
-    function Linearize(expr_fct::Ef,x1::Real,x2::Real, e::ErrorType,algorithm::ExactLin; bounding = Best() ::BoundingType,
-        ConcavityChanges = [Inf]::Array{Float64,1})
-    
-        (isfinite(x1) && isfinite(x2)) || throw(ArgumentError("Must be called on a finite interval"))
-    
-        return ScaledLinearize(expr_fct, x1, x2, e, ExactLin, bounding, ConcavityChanges)
-    end
-    
-    # The function ScaleLinearize will 
-    # 1) invert a negative function to make it positive; 
-    # 2) scale it so it is defined in the interval [0, 1] and such that max(f(x): x in [0, 1]) = 1.
-    function ScaledLinearize(f::Ef, x1::Real, x2::Real, e::ErrorType, LinAlg::Union{Type{ExactLin}, Type{HeuristicLin}}, bounding::BoundingType, concavity_changes)::Vector{LinearPiece}
-        if is_mostly_negative(f, x1, x2)
-            invert = -1
-            g = invert_function(f)
-            new_bounding = bounding isa Under ? Over() : (bounding isa Over ? Under() : Best())
-        else 
-            invert = 1
-            g = f
-            new_bounding = bounding
-        end
-        s = get_scale(g, x1, x2)
-        h = scale_function(g, s, x1, x2)
-        newe = e isa Absolute ? Absolute(e.delta / s) : e
-    
-        # find roots of f and prevent running the main alg at them
-        rts = IntervalRootFinding.roots(x -> h(x), interval(0, 1))
-        breakpoints = [0.0, 1.0]
-        eps = 1e-6
-        for z in rts
-            zmid = (z.region.bareinterval.lo + z.region.bareinterval.hi) / 2 
-            if zmid > eps
-                push!(breakpoints, zmid - eps / 2.001)
-            end
-            if zmid < 1 - 1e-5
-                push!(breakpoints, zmid + eps / 2.001)
-            end
-        end
-        sort!(breakpoints)
+    return ScaledLinearize(expr_fct, x1, x2, e, HeuristicLin, bounding, ConcavityChanges)
+end
+
+function Linearize(expr_fct::Ef,x1::Real,x2::Real, e::ErrorType, algorithm::ExactLin; bounding = Best() ::BoundingType,
+    ConcavityChanges = [Inf]::Array{Float64,1})
+
+    (isfinite(x1) && isfinite(x2)) || throw(ArgumentError("Must be called on a finite interval"))
+
+    return ScaledLinearize(expr_fct, x1, x2, e, ExactLin, bounding, ConcavityChanges)
+end
+
+# The function ScaleLinearize will 
+# 1) invert a negative function to make it positive; 
+# 2) scale it so it is defined in the interval [0, 1] and such that max(f(x): x in [0, 1]) = 1.
+function ScaledLinearize(f::Ef, x1::Real, x2::Real, e::ErrorType, LinAlg::Union{Type{ExactLin}, Type{HeuristicLin}}, bounding::BoundingType, concavity_changes)::Vector{LinearPiece}
+    s = get_scale(f, x1, x2)
+    g = scale_function(f, s, x1, x2)
+    lps = LinearPiece[]
+    if e isa Absolute
+        newe = Absolute(e.delta / s)
+        newlps = LinAlg(g, 0.0, 1.0, newe; bounding = bounding, ConcavityChanges = deepcopy(concavity_changes))
         lps = LinearPiece[]
-        for i in 1:length(breakpoints) - 1
-            xp0, xpf = breakpoints[i], breakpoints[i + 1]
-            if xpf - xp0 < EPS
-            elseif xpf - xp0 < eps
-                lp = construct_constant_piece(h, xp0, xpf, new_bounding)
-                push!(lps, lp)
-            else
-                newlps = LinAlg(h, xp0, xpf, newe; bounding = new_bounding, ConcavityChanges = deepcopy(concavity_changes))
-                # res = [optimize(x -> h(x) - lp(x), lp.xMin, lp.xMax) for lp in newlps]
-                # res = [minimum(r) for r in res]
-                append!(lps, newlps)
+        for lp in newlps
+            unscaled = unscale_linearpiece(lp, s, x1, x2)
+            feasible = reduce_infeasibilities(f, unscaled, bounding)
+            push!(lps, feasible)
+        end
+    else
+        zero_intervals = compute_limits_at_zero(g, 0.0, 1.0)
+        nz_intervals = compute_nonzero_intervals(g, 0.0, 1.0, zero_intervals)
+        lps = LinearPiece[]
+        for z in zero_intervals
+            u, v = z.bareinterval.lo, z.bareinterval.hi
+            cpiece = construct_constant_piece(g, u, v, bounding)
+            unscaled = unscale_linearpiece(cpiece, s, x1, x2)
+            flp = reduce_infeasibilities(f, unscaled, bounding)
+            push!(lps, flp)
+        end
+        for z in nz_intervals
+            u, v = z.bareinterval.lo, z.bareinterval.hi
+            if is_mostly_negative(g, u, v)
+                invert = -1
+                h = invert_function(g)
+                new_bounding = bounding isa Under ? Over() : (bounding isa Over ? Under() : Best())
+            else 
+                invert = 1
+                h = g
+                new_bounding = bounding
+            end
+            newlps = LinAlg(h, u, v, e; bounding = new_bounding, ConcavityChanges = deepcopy(concavity_changes))
+            for lp in newlps
+                inverted = invert_linearpiece(lp, invert)
+                unscaled = unscale_linearpiece(inverted, s, x1, x2)
+                feasible = reduce_infeasibilities(f, unscaled, bounding)
+                push!(lps, feasible)
             end
         end
-        newlps = [invert_linearpiece(unscale_linearpiece(reduce_infeasibilities(h, lp, new_bounding), s, x1, x2), invert) for lp in lps]
-        # res = [optimize(x -> f(x) - lp(x), lp.xMin, lp.xMax) for lp in newlps]
-        # res = [minimum(r) for r in res]
-        # println("hola")
-        # println("res = $(res)")
-        return newlps
+        sort!(lps; lt = (u, v) -> u.xMax <= v.xMin + 1e-9)
     end
+    return lps
+end
