@@ -33,7 +33,7 @@ end
 
 #evaluate a pieceWise linear function
 
-function (pwl::Array{LinearPiece, 1})(x::Real)
+#=function (pwl::Array{LinearPiece, 1})(x::Real)
 
     if x < pwl[1].xMin || x > pwl[end].xMax
         throw(DomainError(x, "argument must be in the domain of the function"))
@@ -43,6 +43,12 @@ function (pwl::Array{LinearPiece, 1})(x::Real)
     pieceIndex = searchsortedlast(starts,x)
     return pwl[pieceIndex](x)
 
+end
+=#
+
+struct LinearizationEval
+    val::Float64
+    piece::Int64
 end
 
 +(pwl::Array{LinearPiece, 1}, x::Real) = pwl .+ x
@@ -108,4 +114,9 @@ Derive(x::Number) = 0
 Derive(expr::Expr) = Calculus.simplify(differentiate(expr, :x))  # this is probably super slow
 Derive(f::Function) = Base.Fix1(ForwardDiff.derivative, f)
 
-;
+struct ScalarOptResult
+    x::Float64
+    val::Float64
+end
+
+const EPS::Float64 = 1e-7
